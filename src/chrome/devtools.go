@@ -12,8 +12,7 @@ import (
 )
 
 func GetScreenShot(url string) (data []byte, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	ctx := context.TODO()
 
 	// Use the DevTools json API to get the current page.
 	devt := devtool.New("http://127.0.0.1:9222")
@@ -35,11 +34,12 @@ func GetScreenShot(url string) (data []byte, err error) {
 	// Create a new CDP Client that uses conn.
 	c := cdp.NewClient(conn)
 
+	err = c.Emulation.SetVisibleSize(ctx, &cdpcmd.EmulationSetVisibleSizeArgs{Width:510, Height:420})
+
 	// Enable events on the Page domain.
 	if err = c.Page.Enable(ctx); err != nil {
 		return
 	}
-
 	// New DOMContentEventFired client will receive and buffer
 	// ContentEventFired events from now on.
 	domContentEventFired, err := c.Page.DOMContentEventFired(ctx)
@@ -62,22 +62,15 @@ func GetScreenShot(url string) (data []byte, err error) {
 
 	fmt.Printf("Page loaded with frame ID: %s\n", nav.FrameID)
 
-	// Fetch the document root node. We can pass nil here
-	// since this method only takes optional arguments.
-	doc, err := c.DOM.GetDocument(ctx, nil)
-	if err != nil {
-		return
+	for {
+		var doc *cdpcmd.DOMGetDocumentReply
+		doc, err = c.DOM.GetDocument(ctx, nil)
+		if *doc.Root.Children[1].Children[1].ChildNodeCount != 2 {
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
 	}
-
-	// Get the outer HTML for the page.
-	result, err := c.DOM.GetOuterHTML(ctx, cdpcmd.NewDOMGetOuterHTMLArgs(doc.Root.NodeID))
-	if err != nil {
-		return
-	}
-
-	fmt.Printf("HTML: %s\n", result.OuterHTML)
-
-	time.Sleep(8 * time.Second)
 
 	// Capture a screenshot of the current page.
 	screenshotName := "screenshot.png"
