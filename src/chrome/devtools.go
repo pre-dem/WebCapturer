@@ -72,6 +72,9 @@ func GetScreenShot(url string) (data []byte, err error) {
 		}
 	}
 
+	// wait 2 second until the full images been rendered
+	time.Sleep(2 * time.Second)
+
 	// Capture a screenshot of the current page.
 	screenshotName := "screenshot.png"
 	screenshot, err := c.Page.CaptureScreenshot(ctx, cdpcmd.NewPageCaptureScreenshotArgs().SetFormat("png"))
