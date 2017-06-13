@@ -5,8 +5,8 @@ import (
 	"qiniupkg.com/x/log.v7"
 	"io/ioutil"
 	"encoding/json"
-	"screenshot/base"
-	"screenshot/router"
+	"base"
+	"router"
 )
 
 func main() {

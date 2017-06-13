@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"screenshot/base"
+	"base"
 )
 
 var config *base.Config

@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"qiniupkg.com/x/log.v7"
 	"net/http"
-	"screenshot/chrome"
+	"chrome"
 )
 
 const ErrorCodeBadRequest = 400000
