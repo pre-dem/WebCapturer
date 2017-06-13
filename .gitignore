@@ -23,5 +23,4 @@ gen### Go template
 .glide/
 
 .DS_Store
-.gitignore
 .idea/
