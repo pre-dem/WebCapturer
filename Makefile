@@ -11,4 +11,4 @@ osx:
 	cp start.sh build/start.sh
 
 docker: linux
-	docker build -t screenshotd:1.0.0 .
+	docker build -t screenshotd:latest .
