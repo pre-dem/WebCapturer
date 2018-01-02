@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 	"github.com/mafredri/cdp/protocol/page"
+	"qiniupkg.com/x/log.v7"
 )
 
 func GetScreenShot(url, siteType string) (data []byte, err error) {
@@ -22,39 +23,41 @@ func GetScreenShot(url, siteType string) (data []byte, err error) {
 		}
 	}
 
-	// Connect to Chrome Debugging Protocol target.
+	// Initiate a new RPC connection to the Chrome Debugging Protocol target.
 	conn, err := rpcc.DialContext(ctx, pt.WebSocketDebuggerURL)
 	if err != nil {
 		return
 	}
-	defer conn.Close() // Must be closed when we are done.
+	defer conn.Close() // Leaving connections open will leak memory.
 
-	// Create a new CDP Client that uses conn.
 	c := cdp.NewClient(conn)
 
-	// Enable events on the Page domain.
+	// Open a DOMContentEventFired client to buffer this event.
+	domContent, err := c.Page.DOMContentEventFired(ctx)
+	if err != nil {
+		return
+	}
+	defer domContent.Close()
+
+	// Enable events on the Page domain, it's often preferrable to create
+	// event clients before enabling events so that we don't miss any.
 	if err = c.Page.Enable(ctx); err != nil {
 		return
 	}
-	// New DOMContentEventFired client will receive and buffer
-	// ContentEventFired events from now on.
-	domContentEventFired, err := c.Page.DOMContentEventFired(ctx)
-	if err != nil {
-		return
-	}
-	defer domContentEventFired.Close()
 
 	// Create the Navigate arguments with the optional Referrer field set.
 	navArgs := page.NewNavigateArgs(url)
-	_, err = c.Page.Navigate(ctx, navArgs)
+	nav, err := c.Page.Navigate(ctx, navArgs)
 	if err != nil {
 		return
 	}
 
-	// Block until a DOM ContentEventFired event is triggered.
-	if _, err = domContentEventFired.Recv(); err != nil {
+	// Wait until we have a DOMContentEventFired event.
+	if _, err = domContent.Recv(); err != nil {
 		return
 	}
+
+	log.Infof("Page loaded with frame ID: %s\n", nav.FrameID)
 
 	// wait 2 second until the full images been rendered
 	time.Sleep(2 * time.Second)

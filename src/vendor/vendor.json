@@ -487,6 +487,12 @@
 			"path": "gopkg.in/yaml.v2",
 			"revision": "287cf08546ab5e7e37d55a84f7ed3fd1db036de5",
 			"revisionTime": "2017-11-16T09:02:43Z"
+		},
+		{
+			"checksumSHA1": "ulz4hb9Aps2rOyFh8hQCHRAyHOI=",
+			"path": "qiniupkg.com/x/log.v7",
+			"revision": "946c4a16076d6d98aeb78619e2bd4012357f7228",
+			"revisionTime": "2015-07-21T03:42:11Z"
 		}
 	],
 	"rootPath": "/Users/wangsiyu/Code/qiniu/screenshot/src"
