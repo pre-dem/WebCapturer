@@ -16,7 +16,7 @@ url 参数：
 | site_type | string | 否 | 站点类型，当前只支持默认类型或 grafana |
 | window_width | int | 是 | 截图窗口宽度 |
 | window_height | int | 是 | 截图窗口高度 |
-| cookies | int | 是 | 截图之前需要设置的 cookies |
+| cookies | int | 是 | 截图之前需要设置的 cookies，样例参考 `src/chrome/cookies.json` |
 
 ## 快速开始
 
