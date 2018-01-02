@@ -19,6 +19,10 @@ var (
 	ErrConnClosing = errors.New("rpcc: the connection is closing")
 )
 
+const (
+	defaultWriteBufferSize = 4096
+)
+
 // DialOption represents a dial option passed to Dial.
 type DialOption func(*dialOptions)
 
@@ -39,9 +43,32 @@ func WithDialer(f func(ctx context.Context, addr string) (net.Conn, error)) Dial
 	}
 }
 
+// WithWriteBufferSize returns a DialOption that sets the size of the write
+// buffer for the underlying websocket connection. Messages larger than this
+// size are fragmented according to the websocket specification.
+//
+// The maximum buffer size for recent versions of Chrome is 104857586 (~100MB),
+// for older versions a maximum of 1048562 (~1MB) can be used. This is because
+// Chrome does not support websocket fragmentation.
+func WithWriteBufferSize(n int) DialOption {
+	return func(o *dialOptions) {
+		o.wsDialer.WriteBufferSize = n
+	}
+}
+
+// WithCompression returns a DialOption that enables compression for the
+// underlying websocket connection. Use SetCompressionLevel on Conn to
+// change the default compression level for subsequent writes.
+func WithCompression() DialOption {
+	return func(o *dialOptions) {
+		o.wsDialer.EnableCompression = true
+	}
+}
+
 type dialOptions struct {
-	codec  func(io.ReadWriter) Codec
-	dialer func(context.Context, string) (net.Conn, error)
+	codec    func(io.ReadWriter) Codec
+	dialer   func(context.Context, string) (net.Conn, error)
+	wsDialer websocket.Dialer
 }
 
 // Dial connects to target and returns an active connection.
@@ -82,17 +109,37 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	netDial := c.dialOpts.dialer
 	if netDial == nil {
 		netDial = func(ctx context.Context, addr string) (net.Conn, error) {
-			d := websocket.Dialer{
-				// Set NetDial to dial with context, this action will
-				// override the HandshakeTimeout setting.
-				NetDial: func(network, addr string) (net.Conn, error) {
-					return (&net.Dialer{}).DialContext(ctx, network, addr)
-				},
+			ws := &c.dialOpts.wsDialer
+
+			if ws.WriteBufferSize == 0 {
+				// Set the default size for use in writeLimiter.
+				ws.WriteBufferSize = defaultWriteBufferSize
 			}
-			wsConn, _, err := d.Dial(addr, nil)
+
+			// Set NetDial to dial with context, this action will
+			// override the HandshakeTimeout setting.
+			ws.NetDial = func(network, addr string) (net.Conn, error) {
+				conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+				// Use writeLimiter to avoid writing fragmented
+				// websocket messages. We're not accounting for
+				// the header length here because it varies, as
+				// a result we might block some valid writes
+				// that are a few bytes too large.
+				return &writeLimiter{
+					limit: ws.WriteBufferSize,
+					Conn:  conn,
+				}, err
+			}
+
+			wsConn, _, err := ws.Dial(addr, nil)
 			if err != nil {
 				return nil, err
 			}
+
+			if ws.EnableCompression {
+				c.compressionLevel = wsConn.SetCompressionLevel
+			}
+
 			return &wsNetConn{conn: wsConn}, nil
 		}
 	}
@@ -112,28 +159,52 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	c.codec = newCodec(c.conn)
 
-	recvDone := make(chan error, 1)
+	recvDone := func(err error) {
+		// When we receive Inspector.detached the remote will close
+		// the connection afterwards and recvDone will return. Maybe
+		// we could give the user time to react to the event before
+		// closing?
+		// TODO(mafredri): Do we want to close here, like this?
+		c.close(err)
+	}
 	go c.recv(c.notify, recvDone)
-	go func() {
-		select {
-		case <-c.ctx.Done():
-		case err := <-recvDone:
-			// When we receive Inspector.detached the remote will close
-			// the connection afterwards and recvDone will return. Maybe
-			// we could give the user time to react to the event before
-			// closing?
-			// TODO: Do we want to close here, like this?
-			c.close(err)
-		}
-	}()
 
 	return c, nil
+}
+
+// writeLimiter wraps a net.Conn and prevents writes of greater length
+// than limit. Works around Chrome's lack of support for large or
+// fragmented websocket messages and prevents sudden termination of the
+// websocket connection. Gives the user an actionable error message when
+// writes exceed limit.
+type writeLimiter struct {
+	limit int
+	net.Conn
+}
+
+// BUG(mafredri): Chrome does not support websocket fragmentation
+// (continuation messages) or messages that exceed 1MB in size.
+// This limit was bumped in more recent versions of Chrome which can
+// receive messages up to 100MB in size.
+// See https://github.com/mafredri/cdp/issues/4 and
+// https://github.com/ChromeDevTools/devtools-protocol/issues/24.
+func (c *writeLimiter) Write(b []byte) (n int, err error) {
+	if len(b) > c.limit {
+		return 0, errors.New("rpcc: message too large (increase write buffer size or enable compression)")
+	}
+	return c.Conn.Write(b)
 }
 
 // Codec is used by recv and dispatcher to
 // send and receive RPC communication.
 type Codec interface {
+	// WriteRequest encodes and writes the request onto the
+	// underlying connection. Request is re-used between writes and
+	// references to it should not be kept.
 	WriteRequest(*Request) error
+	// ReadResponse decodes a response from the underlying
+	// connection. Response is re-used between reads and references
+	// to it should not be kept.
 	ReadResponse(*Response) error
 }
 
@@ -153,18 +224,19 @@ type Conn struct {
 
 	dialOpts dialOptions
 	conn     net.Conn
-	closed   bool
 
-	// Codec encodes and decodes JSON onto conn. There is only one
-	// active decoder (recv) and encoder (guaranteed via reqMu).
-	codec Codec
+	compressionLevel func(level int) error
 
 	mu      sync.Mutex // Protects following.
+	closed  bool
 	reqSeq  uint64
 	pending map[uint64]*rpcCall
 
 	reqMu sync.Mutex // Protects following.
 	req   Request
+	// Encodes and decodes JSON onto conn. Encoding is
+	// guarded by mutex and decoding is done by recv.
+	codec Codec
 
 	streamMu sync.Mutex // Protects following.
 	streams  map[string]*streamClients
@@ -222,13 +294,13 @@ var (
 // recv decodes and handles RPC responses. Responses to RPC requests
 // are forwarded to the pending call, if any. RPC Notifications are
 // forwarded by calling notify, synchronously.
-func (c *Conn) recv(notify func(string, []byte), done chan<- error) {
+func (c *Conn) recv(notify func(string, []byte), done func(error)) {
 	var resp Response
 	var err error
 	for {
 		resp.reset()
 		if err = c.codec.ReadResponse(&resp); err != nil {
-			done <- err
+			done(err)
 			return
 		}
 
@@ -287,6 +359,10 @@ func (c *Conn) send(ctx context.Context, call *rpcCall) (err error) {
 	}()
 
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return ErrConnClosing
+	}
 	c.reqSeq++
 	reqID := c.reqSeq
 	c.pending[reqID] = call
@@ -308,8 +384,6 @@ func (c *Conn) send(ctx context.Context, call *rpcCall) (err error) {
 
 	// Abort on user or connection cancellation.
 	select {
-	case <-c.ctx.Done():
-		err = ErrConnClosing
 	case <-ctx.Done():
 		err = ctx.Err()
 	case err = <-done:
@@ -333,7 +407,7 @@ func (c *Conn) notify(method string, data []byte) {
 	c.streamMu.Lock()
 	stream := c.streams[method]
 	if stream != nil {
-		stream.send(data)
+		stream.write(method, data)
 	}
 	c.streamMu.Unlock()
 }
@@ -341,7 +415,7 @@ func (c *Conn) notify(method string, data []byte) {
 // listen registers a new stream listener (chan) for the RPC notification
 // method. Returns a function for removing the listener. Error if the
 // connection is closed.
-func (c *Conn) listen(method string, client *streamClient) (func(), error) {
+func (c *Conn) listen(method string, w streamWriter) (func(), error) {
 	c.streamMu.Lock()
 	defer c.streamMu.Unlock()
 
@@ -351,21 +425,16 @@ func (c *Conn) listen(method string, client *streamClient) (func(), error) {
 
 	stream, ok := c.streams[method]
 	if !ok {
-		stream = newStreamService()
+		stream = newStreamClients()
 		c.streams[method] = stream
 	}
-	seq := stream.add(client)
+	seq := stream.add(w)
 
 	return func() { stream.remove(seq) }, nil
 }
 
 // Close closes the connection.
 func (c *Conn) close(err error) error {
-	// Stop sending on all streams.
-	c.streamMu.Lock()
-	c.streams = nil
-	c.streamMu.Unlock()
-
 	c.cancel()
 
 	c.mu.Lock()
@@ -383,12 +452,27 @@ func (c *Conn) close(err error) error {
 	}
 	c.mu.Unlock()
 
+	// Stop sending on all streams.
+	c.streamMu.Lock()
+	c.streams = nil
+	c.streamMu.Unlock()
+
 	// Conn can be nil if DialContext did not complete.
 	if c.conn != nil {
 		err = c.conn.Close()
 	}
 
 	return err
+}
+
+// SetCompressionLevel sets the flate compressions level for writes. Valid level
+// range is [-2, 9]. Returns error if compression is not enabled for Conn. See
+// package compress/flate for a description of compression levels.
+func (c *Conn) SetCompressionLevel(level int) error {
+	if c.compressionLevel == nil {
+		return errors.New("rpcc: compression is not enabled for Conn")
+	}
+	return c.compressionLevel(level)
 }
 
 // Close closes the connection.

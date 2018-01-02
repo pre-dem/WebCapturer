@@ -1,6 +1,6 @@
 FROM yukinying/chrome-headless
 
-MAINTAINER Craig Wang "wangsiyu@qiniu.com"
+MAINTAINER WangSiyu "wangsiyu@qiniu.com"
 
 WORKDIR /root/screenshot
 

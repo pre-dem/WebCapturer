@@ -20,7 +20,11 @@ func GetScreenShot_v1(c *gin.Context)  {
 		})
 		return
 	}
-	data, err := chrome.GetScreenShot(url)
+
+	siteType, _ := c.GetQuery("site_type")
+
+	data, err := chrome.GetScreenShot(url, siteType)
+
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusBadRequest, gin.H{
