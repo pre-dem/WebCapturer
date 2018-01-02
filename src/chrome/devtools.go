@@ -8,9 +8,10 @@ import (
 	"time"
 	"github.com/mafredri/cdp/protocol/page"
 	"qiniupkg.com/x/log.v7"
+	"github.com/mafredri/cdp/protocol/emulation"
 )
 
-func GetScreenShot(url, siteType string) (data []byte, err error) {
+func GetScreenShot(url, siteType string, windowWidth, windowHeight uint64) (data []byte, err error) {
 	ctx := context.TODO()
 
 	// Use the DevTools json API to get the current page.
@@ -59,8 +60,14 @@ func GetScreenShot(url, siteType string) (data []byte, err error) {
 
 	log.Infof("Page loaded with frame ID: %s\n", nav.FrameID)
 
+	emuClient := emulation.NewClient(conn)
+	err = emuClient.SetVisibleSize(ctx, emulation.NewSetVisibleSizeArgs(int(windowWidth), int(windowHeight)))
+	if err != nil {
+		return
+	}
+
 	// wait 2 second until the full images been rendered
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// Capture a screenshot of the current page.
 	screenshot, err := c.Page.CaptureScreenshot(ctx, page.NewCaptureScreenshotArgs().SetFormat("png"))
