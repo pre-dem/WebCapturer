@@ -11,7 +11,7 @@ import (
 	"github.com/mafredri/cdp/protocol/emulation"
 )
 
-func GetScreenShot(url, siteType string, windowWidth, windowHeight uint64) (data []byte, err error) {
+func GetScreenShot(url, siteType string, windowWidth, windowHeight int) (data []byte, err error) {
 	ctx := context.TODO()
 
 	// Use the DevTools json API to get the current page.
@@ -23,7 +23,6 @@ func GetScreenShot(url, siteType string, windowWidth, windowHeight uint64) (data
 			return
 		}
 	}
-
 	// Initiate a new RPC connection to the Chrome Debugging Protocol target.
 	conn, err := rpcc.DialContext(ctx, pt.WebSocketDebuggerURL)
 	if err != nil {
@@ -46,9 +45,12 @@ func GetScreenShot(url, siteType string, windowWidth, windowHeight uint64) (data
 		return
 	}
 
+	if err = c.Emulation.SetVisibleSize(ctx, emulation.NewSetVisibleSizeArgs(windowWidth, windowHeight)); err != nil {
+		return
+	}
+
 	// Create the Navigate arguments with the optional Referrer field set.
-	navArgs := page.NewNavigateArgs(url)
-	nav, err := c.Page.Navigate(ctx, navArgs)
+	nav, err := c.Page.Navigate(ctx, page.NewNavigateArgs(url))
 	if err != nil {
 		return
 	}
@@ -60,14 +62,8 @@ func GetScreenShot(url, siteType string, windowWidth, windowHeight uint64) (data
 
 	log.Infof("Page loaded with frame ID: %s\n", nav.FrameID)
 
-	emuClient := emulation.NewClient(conn)
-	err = emuClient.SetVisibleSize(ctx, emulation.NewSetVisibleSizeArgs(int(windowWidth), int(windowHeight)))
-	if err != nil {
-		return
-	}
-
 	// wait 2 second until the full images been rendered
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// Capture a screenshot of the current page.
 	screenshot, err := c.Page.CaptureScreenshot(ctx, page.NewCaptureScreenshotArgs().SetFormat("png"))
