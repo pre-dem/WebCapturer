@@ -10,6 +10,7 @@ import (
 	"qiniupkg.com/x/log.v7"
 	"github.com/mafredri/cdp/protocol/emulation"
 	"github.com/mafredri/cdp/protocol/network"
+	"github.com/mafredri/cdp/protocol/runtime"
 )
 
 func GetScreenShot(url, siteType string, windowWidth, windowHeight int, cookies []network.CookieParam) (data []byte, err error) {
@@ -55,10 +56,11 @@ func GetScreenShot(url, siteType string, windowWidth, windowHeight int, cookies 
 		return
 	}
 
-
-	err = c.Network.SetCookies(ctx, network.NewSetCookiesArgs(cookies))
-	if err != nil {
-		return
+	if len(cookies) != 0 {
+		err = c.Network.SetCookies(ctx, network.NewSetCookiesArgs(cookies))
+		if err != nil {
+			return
+		}
 	}
 
 	// Create the Navigate arguments with the optional Referrer field set.
@@ -74,8 +76,10 @@ func GetScreenShot(url, siteType string, windowWidth, windowHeight int, cookies 
 
 	log.Infof("Page loaded with frame ID: %s\n", nav.FrameID)
 
-	// wait 2 second until the full images been rendered
-	time.Sleep(2 * time.Second)
+	err = waitUntilRenderComplete(ctx, c, siteType)
+	if err != nil {
+		return
+	}
 
 	// Capture a screenshot of the current page.
 	screenshot, err := c.Page.CaptureScreenshot(ctx, page.NewCaptureScreenshotArgs().SetFormat("png"))
@@ -84,4 +88,38 @@ func GetScreenShot(url, siteType string, windowWidth, windowHeight int, cookies 
 	}
 	data = screenshot.Data
 	return
+}
+
+func waitUntilRenderComplete(ctx context.Context, c *cdp.Client, siteType string) error {
+	switch siteType {
+	case "grafana":
+		script := `
+		!!function checkIsReady() {
+		if (!window.angular) { return false; }
+        var body = window.angular.element(document.body);
+        if (!body.injector) { return false; }
+        if (!body.injector()) { return false; }
+
+        var rootScope = body.injector().get('$rootScope');
+        if (!rootScope) {return false;}
+        var panels = angular.element('div.panel:visible').length;
+        return rootScope.panelsRendered >= panels;
+		}()
+`
+		for {
+			eval, err := c.Runtime.Evaluate(ctx, runtime.NewEvaluateArgs(script))
+			if err != nil {
+				return err
+			}
+			result := string(eval.Result.Value)
+			if result == "false" {
+				time.Sleep(time.Second)
+				continue
+			}
+			return nil
+		}
+	default:
+		time.Sleep(5 * time.Second)
+	}
+	return nil
 }

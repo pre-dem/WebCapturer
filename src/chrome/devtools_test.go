@@ -28,7 +28,7 @@ func TestGetScreenShot(t *testing.T) {
 			URL:&url,
 		},
 	}
-	data, err := GetScreenShot("http://zw0de1gx.nq.cloudappl.com/dashboard/db/predem-nginx-logs?refresh=30s&orgId=1", "", 1500, 1000, cookies)
+	data, err := GetScreenShot("http://zw0de1gx.nq.cloudappl.com/dashboard/db/predem-nginx-logs?refresh=30s&orgId=1", "grafana", 1500, 1000, cookies)
 	if err != nil {
 		log.Error(err)
 		return
