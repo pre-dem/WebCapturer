@@ -1,17 +1,17 @@
 [
   {
-    "url": "http://zw0de1gx.nq.cloudappl.com",
+    "url": "YOUR_URL",
     "name": "grafana_remember",
-    "value": "e0f8a0242cda66ef54b89d5fb745a0b55f753cb8101ca6fea2365323ad4a933899"
+    "value": "YOUR_grafana_remember"
   },
   {
-    "url": "http://zw0de1gx.nq.cloudappl.com",
+    "url": "YOUR_URL",
     "name": "grafana_sess",
-    "value": "26b2cf2831cd416f"
+    "value": "YOUR_grafana_sess"
   },
   {
-    "url": "http://zw0de1gx.nq.cloudappl.com",
+    "url": "YOUR_URL",
     "name": "grafana_user",
-    "value": "admin"
+    "value": "YOUR_grafana_user"
   }
 ]
