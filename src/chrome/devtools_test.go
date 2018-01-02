@@ -6,10 +6,29 @@ import (
 	"io/ioutil"
 	"qiniupkg.com/x/log.v7"
 	"time"
+	"github.com/mafredri/cdp/protocol/network"
 )
 
 func TestGetScreenShot(t *testing.T) {
-	data, err := GetScreenShot("https://www.taobao.com", "", 1500, 1000)
+	url := "http://zw0de1gx.nq.cloudappl.com"
+	cookies := []network.CookieParam{
+		{
+			Name:"grafana_remember",
+			Value:"e0f8a0242cda66ef54b89d5fb745a0b55f753cb8101ca6fea2365323ad4a933899",
+			URL:&url,
+		},
+		{
+			Name:"grafana_sess",
+			Value:"26b2cf2831cd416f",
+			URL:&url,
+		},
+		{
+			Name:"grafana_user",
+			Value:"admin",
+			URL:&url,
+		},
+	}
+	data, err := GetScreenShot("http://zw0de1gx.nq.cloudappl.com/dashboard/db/predem-nginx-logs?refresh=30s&orgId=1", "", 1500, 1000, cookies)
 	if err != nil {
 		log.Error(err)
 		return

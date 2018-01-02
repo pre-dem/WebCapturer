@@ -9,9 +9,10 @@ import (
 	"github.com/mafredri/cdp/protocol/page"
 	"qiniupkg.com/x/log.v7"
 	"github.com/mafredri/cdp/protocol/emulation"
+	"github.com/mafredri/cdp/protocol/network"
 )
 
-func GetScreenShot(url, siteType string, windowWidth, windowHeight int) (data []byte, err error) {
+func GetScreenShot(url, siteType string, windowWidth, windowHeight int, cookies []network.CookieParam) (data []byte, err error) {
 	ctx := context.TODO()
 
 	// Use the DevTools json API to get the current page.
@@ -46,6 +47,17 @@ func GetScreenShot(url, siteType string, windowWidth, windowHeight int) (data []
 	}
 
 	if err = c.Emulation.SetVisibleSize(ctx, emulation.NewSetVisibleSizeArgs(windowWidth, windowHeight)); err != nil {
+		return
+	}
+
+	err = c.Network.ClearBrowserCookies(ctx)
+	if err != nil {
+		return
+	}
+
+
+	err = c.Network.SetCookies(ctx, network.NewSetCookiesArgs(cookies))
+	if err != nil {
 		return
 	}
 
