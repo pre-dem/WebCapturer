@@ -13,7 +13,8 @@ func RunNewRouter(c *base.Config) {
 
 	// Init router
 	router := gin.New()
-	router.Use(ScreenShotLogger())
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
 
 	// Register routes to router
 	for _, route := range routes {
