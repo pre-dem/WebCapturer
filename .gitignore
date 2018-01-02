@@ -25,3 +25,4 @@ gen### Go template
 .DS_Store
 .idea/
 build/
+.cache/
