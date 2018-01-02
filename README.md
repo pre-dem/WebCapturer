@@ -10,6 +10,7 @@ GET /v1/get_screenshot
 Content-Type: application/json
 ```
 url 参数：
+
 | 参数 | 类型 | 必填 | 说明 |
 | - | - | - | - |
 | url | string | 是 | 需要截图的 url |
