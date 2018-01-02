@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"chrome"
 	"strconv"
+	"github.com/mafredri/cdp/protocol/network"
+	"encoding/json"
 )
 
 const ErrorCodeBadRequest = 400000
@@ -45,7 +47,21 @@ func GetScreenShot_v1(c *gin.Context)  {
 		return
 	}
 
-	data, err := chrome.GetScreenShot(url, siteType, int(windowWidth), int(windowHeight))
+	strCookies, ok := c.GetQuery("cookies")
+	var cookies []network.CookieParam
+	if ok {
+		err := json.Unmarshal([]byte(strCookies), &cookies)
+		if err != nil {
+			log.Error(err)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error_code": ErrorCodeBadRequest,
+				"error_message": err.Error(),
+			})
+			return
+		}
+	}
+
+	data, err := chrome.GetScreenShot(url, siteType, int(windowWidth), int(windowHeight), cookies)
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusBadRequest, gin.H{
