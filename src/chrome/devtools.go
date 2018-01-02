@@ -13,11 +13,11 @@ import (
 	"github.com/mafredri/cdp/protocol/runtime"
 )
 
-func GetScreenShot(url, siteType string, windowWidth, windowHeight int, cookies []network.CookieParam) (data []byte, err error) {
+func GetScreenShot(chromeUrl, url, siteType string, windowWidth, windowHeight int, cookies []network.CookieParam) (data []byte, err error) {
 	ctx := context.TODO()
 
 	// Use the DevTools json API to get the current page.
-	devt := devtool.New("http://127.0.0.1:9222")
+	devt := devtool.New(chromeUrl)
 	pt, err := devt.Get(ctx, devtool.Page)
 	if err != nil {
 		pt, err = devt.Create(ctx)

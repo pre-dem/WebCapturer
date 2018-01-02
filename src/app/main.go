@@ -23,7 +23,6 @@ func main() {
 		log.Println("load config failed", err)
 		return
 	}
-
 	router.RunNewRouter(c)
 }
 

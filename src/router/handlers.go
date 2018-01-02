@@ -61,7 +61,7 @@ func GetScreenShot_v1(c *gin.Context)  {
 		}
 	}
 
-	data, err := chrome.GetScreenShot(url, siteType, int(windowWidth), int(windowHeight), cookies)
+	data, err := chrome.GetScreenShot(config.ChromeUrl, url, siteType, int(windowWidth), int(windowHeight), cookies)
 	if err != nil {
 		log.Error(err)
 		c.JSON(http.StatusBadRequest, gin.H{

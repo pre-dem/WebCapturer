@@ -28,7 +28,7 @@ func TestGetScreenShot(t *testing.T) {
 			URL:&url,
 		},
 	}
-	data, err := GetScreenShot("YOUR_URL", "grafana", 1500, 1000, cookies)
+	data, err := GetScreenShot("http://127.0.0.1:9222","YOUR_URL", "grafana", 1500, 1000, cookies)
 	if err != nil {
 		log.Error(err)
 		return
