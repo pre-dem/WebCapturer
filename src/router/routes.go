@@ -13,7 +13,7 @@ type Routes []Route
 
 var routes = Routes{
 	Route{
-		"TelemetryTest",
+		"GetScreenShot",
 		"GET",
 		"/v1/get_screenshot",
 		GetScreenShot_v1,
